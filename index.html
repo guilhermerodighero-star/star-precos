@@ -39,7 +39,7 @@
     }
     main {
       padding: 16px;
-      max-width: 900px;
+      max-width: 1000px;
       margin: 0 auto;
       flex: 1;
       box-sizing: border-box;
@@ -139,12 +139,63 @@
       background: #0b915e;
       color: #fff;
     }
+    .badge-orcamento {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #1460d2;
+      color: #fff;
+    }
     #adminConfig {
       border-radius: 8px;
       padding: 8px;
       background: #f0f4f0;
       margin-bottom: 8px;
       display: none;
+    }
+    .orcamento-controls {
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+    }
+    .orcamento-controls input[type="number"] {
+      width: 70px;
+      min-width: 70px;
+    }
+    .orcamento-subtotal {
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .orcamento-panel {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px dashed #ccc;
+    }
+    .orcamento-panel h3 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+    }
+    .orcamento-linha {
+      font-size: 13px;
+      padding: 4px 0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 6px;
+      border-top: 1px solid #f0f0f0;
+    }
+    .orcamento-linha:first-child {
+      border-top: none;
+    }
+    .orcamento-total {
+      margin-top: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: right;
     }
     footer {
       font-size: 11px;
@@ -159,11 +210,13 @@
     <div>
       <h1>Consulta de Preços – Starmobile</h1>
       <div class="tagline">
-        Uso interno: pesquisa por código, nome e palavras-chave, com cálculo automático de IPI, frete, markup e desconto autorizado.
+        Uso interno: pesquisa por código, nome e palavras-chave, com cálculo automático de IPI, frete, markup, desconto autorizado e modo orçamento.
       </div>
     </div>
     <div class="header-actions">
+      <span id="orcamentoBadge" class="badge-orcamento" style="display:none;">Modo orçamento</span>
       <span id="adminBadge" class="badge-admin" style="display:none;">Modo gerente</span>
+      <button id="btnToggleOrcamento">🧾 Modo orçamento</button>
       <button id="btnToggleAdmin">🔐 Modo gerente</button>
     </div>
   </header>
@@ -195,7 +248,7 @@
       </div>
 
       <div class="controls">
-        <input id="campoBusca" type="text" placeholder="Ex.: 1467PM, CADEIRA ATENA COM DEBRUM FAIXA 2, zoe vidro 2,20..." />
+        <input id="campoBusca" type="text" placeholder="Ex.: 1467PM, CADEIRA ATENA COM DEBRUM FAIXA 2, ZOE VIDRO 2,20..." />
         <button id="btnFalar">🎤 <span>Falar</span></button>
         <button id="btnBuscar" class="primary">🔎 <span>Buscar</span></button>
       </div>
@@ -212,6 +265,9 @@
     let produtos = [];
     let frasesUnicas = [];
     let isAdmin = false;
+    let modoOrcamento = false;
+    // orcamento[codigo] = { quantidade: number }
+    let orcamento = {};
 
     const campoBusca = document.getElementById("campoBusca");
     const statusSpan = document.getElementById("status");
@@ -228,6 +284,9 @@
     const btnToggleAdmin = document.getElementById("btnToggleAdmin");
     const btnSalvarConfig = document.getElementById("btnSalvarConfig");
     const adminBadge = document.getElementById("adminBadge");
+
+    const btnToggleOrcamento = document.getElementById("btnToggleOrcamento");
+    const orcamentoBadge = document.getElementById("orcamentoBadge");
 
     const STORAGE_KEY_ADMIN = "starmobile_admin";
     const STORAGE_KEY_IPI = "starmobile_ipi_percent";
@@ -297,7 +356,6 @@
       return lower;
     }
 
-    // <<< AQUI: carregar direto o número com ponto, sem trocar por vírgula >>>
     function carregarConfigNosInputs() {
       const ipi = parseFloat(localStorage.getItem(STORAGE_KEY_IPI));
       const frete = parseFloat(localStorage.getItem(STORAGE_KEY_FRETE));
@@ -330,6 +388,41 @@
       return { ipi, frete, markup, maxDesc };
     }
 
+    function calcularFatoresEDesconto() {
+      const { ipi, frete, markup, maxDesc } = obterConfigAtual();
+      const fatorIPI = 1 + (ipi / 100);
+      const fatorFrete = 1 + (frete / 100);
+      const fatorMarkup = 1 + (markup / 100);
+
+      let descontoDigitado = obterPercentual(descontoInput.value);
+      let descontoAplicado = descontoDigitado;
+
+      if (!isAdmin && descontoDigitado > maxDesc) {
+        descontoAplicado = maxDesc;
+      }
+
+      const fatorDesconto = 1 - (descontoAplicado / 100);
+
+      let avisoDesconto = "";
+      if (!isAdmin && descontoDigitado > maxDesc && maxDesc > 0) {
+        avisoDesconto = `Desconto limitado a ${maxDesc.toFixed(2)}% pela gerência.`;
+      } else if (!isAdmin && descontoDigitado > 0 && maxDesc === 0) {
+        avisoDesconto = `Nenhum desconto autorizado pela gerência.`;
+      }
+
+      return { ipi, frete, markup, maxDesc, fatorIPI, fatorFrete, fatorMarkup, descontoAplicado, fatorDesconto, avisoDesconto };
+    }
+
+    function calcularValoresProduto(produto, fatores) {
+      if (produto.preco_lista == null) {
+        return { base: null, valorComAcrescimos: null, valorFinal: null };
+      }
+      const base = Number(produto.preco_lista);
+      const valorComAcrescimos = base * fatores.fatorIPI * fatores.fatorFrete * fatores.fatorMarkup;
+      const valorFinal = valorComAcrescimos * fatores.fatorDesconto;
+      return { base, valorComAcrescimos, valorFinal };
+    }
+
     function aplicarModoAdminUI() {
       if (isAdmin) {
         adminConfigDiv.style.display = "block";
@@ -343,7 +436,25 @@
       }
     }
 
-    // Ao carregar a página, já puxa os valores do storage para os inputs (se existirem)
+    function aplicarModoOrcamentoUI() {
+      if (modoOrcamento) {
+        orcamentoBadge.style.display = "inline-block";
+        btnToggleOrcamento.textContent = "🧾 Sair do modo orçamento";
+      } else {
+        orcamentoBadge.style.display = "none";
+        btnToggleOrcamento.textContent = "🧾 Modo orçamento";
+      }
+      // Re-render orçamentos com o modo atualizado
+      if (campoBusca.value.trim()) {
+        buscarProduto(campoBusca.value);
+      } else if (modoOrcamento) {
+        // Se não tiver busca, pelo menos renderiza o painel de orçamento vazio
+        resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
+      } else {
+        resultadoDiv.innerHTML = "";
+      }
+    }
+
     carregarConfigNosInputs();
 
     fetch("produtos.json")
@@ -389,7 +500,7 @@
       let termoOriginal = String(termoBruto || "").trim();
       if (!termoOriginal) {
         statusSpan.textContent = "Informe um código ou termo para busca.";
-        resultadoDiv.innerHTML = "";
+        resultadoDiv.innerHTML = modoOrcamento ? renderizarResumoOrcamento(calcularFatoresEDesconto()) : "";
         return;
       }
 
@@ -456,7 +567,7 @@
 
       if (!matches || matches.length === 0) {
         statusSpan.textContent = "Produto não encontrado para: " + termoOriginal;
-        resultadoDiv.innerHTML = "";
+        resultadoDiv.innerHTML = modoOrcamento ? renderizarResumoOrcamento(calcularFatoresEDesconto()) : "";
         return;
       }
 
@@ -466,26 +577,7 @@
         statusSpan.textContent = matches.length + " produtos encontrados";
       }
 
-      const { ipi, frete, markup, maxDesc } = obterConfigAtual();
-      const fatorIPI = 1 + (ipi / 100);
-      const fatorFrete = 1 + (frete / 100);
-      const fatorMarkup = 1 + (markup / 100);
-
-      let descontoDigitado = obterPercentual(descontoInput.value);
-      let descontoAplicado = descontoDigitado;
-
-      if (!isAdmin && descontoDigitado > maxDesc) {
-        descontoAplicado = maxDesc;
-      }
-
-      const fatorDesconto = 1 - (descontoAplicado / 100);
-
-      let avisoDesconto = "";
-      if (!isAdmin && descontoDigitado > maxDesc && maxDesc > 0) {
-        avisoDesconto = `Desconto limitado a ${maxDesc.toFixed(2)}% pela gerência.`;
-      } else if (!isAdmin && descontoDigitado > 0 && maxDesc === 0) {
-        avisoDesconto = `Nenhum desconto autorizado pela gerência.`;
-      }
+      const fatores = calcularFatoresEDesconto();
 
       let html = "";
       if (matches.length > 1) {
@@ -493,28 +585,39 @@
       }
 
       matches.forEach((p) => {
+        const valores = calcularValoresProduto(p, fatores);
         html += `<div class="item">`;
         html += `<div><strong>Código:</strong> ${p.codigo}</div>`;
         if (p.chaves) {
           html += `<div><strong>Descrição:</strong> ${p.chaves}</div>`;
         }
 
-        if (p.preco_lista != null) {
-          const base = Number(p.preco_lista);
-          const valorComAcrescimos = base * fatorIPI * fatorFrete * fatorMarkup;
-          const valorFinal = valorComAcrescimos * fatorDesconto;
-
+        if (valores.base != null) {
           if (isAdmin) {
-            html += `<div class="preco">Tabela: R$ ${formatarPreco(base)}</div>`;
-            html += `<div class="preco">Com IPI ${ipi.toFixed(2)}%, frete ${frete.toFixed(2)}% e markup ${markup.toFixed(2)}%: R$ ${formatarPreco(valorComAcrescimos)}</div>`;
-            if (descontoAplicado > 0) {
-              html += `<div class="preco-final">Com desconto ${descontoAplicado.toFixed(2)}%: R$ ${formatarPreco(valorFinal)}</div>`;
+            html += `<div class="preco">Tabela: R$ ${formatarPreco(valores.base)}</div>`;
+            html += `<div class="preco">Com IPI ${fatores.ipi.toFixed(2)}%, frete ${fatores.frete.toFixed(2)}% e markup ${fatores.markup.toFixed(2)}%: R$ ${formatarPreco(valores.valorComAcrescimos)}</div>`;
+            if (fatores.descontoAplicado > 0) {
+              html += `<div class="preco-final">Com desconto ${fatores.descontoAplicado.toFixed(2)}%: R$ ${formatarPreco(valores.valorFinal)}</div>`;
             } else {
-              html += `<div class="preco-final">Valor final: R$ ${formatarPreco(valorComAcrescimos)}</div>`;
+              html += `<div class="preco-final">Valor final: R$ ${formatarPreco(valores.valorComAcrescimos)}</div>`;
             }
           } else {
-            html += `<div class="preco-final">Valor: R$ ${formatarPreco(valorFinal)}</div>`;
+            html += `<div class="preco-final">Valor: R$ ${formatarPreco(valores.valorFinal)}</div>`;
             html += `<div class="preco-sec">Valor calculado com IPI, frete, markup e desconto autorizado pela gerência.</div>`;
+          }
+
+          if (modoOrcamento) {
+            const emOrc = orcamento[p.codigo];
+            const qtd = emOrc ? emOrc.quantidade : 1;
+            const subtotal = valores.valorFinal * qtd;
+            const checkedAttr = emOrc ? "checked" : "";
+            html += `<div class="orcamento-controls">
+              <label><input type="checkbox" class="chk-orcamento" data-codigo="${p.codigo}" ${checkedAttr}> Incluir no orçamento</label>
+              <label>Qtd:
+                <input type="number" min="1" value="${qtd}" class="input-qtd-orcamento" data-codigo="${p.codigo}">
+              </label>
+              <span class="orcamento-subtotal" data-codigo="${p.codigo}">Subtotal: R$ ${formatarPreco(subtotal)}</span>
+            </div>`;
           }
         } else {
           html += `<div class="preco-sec">Sem preço de tabela cadastrado.</div>`;
@@ -523,11 +626,48 @@
         html += `</div>`;
       });
 
-      if (avisoDesconto) {
-        html = `<div class="preco-sec">${avisoDesconto}</div>` + html;
+      if (fatores.avisoDesconto) {
+        html = `<div class="preco-sec">${fatores.avisoDesconto}</div>` + html;
+      }
+
+      if (modoOrcamento) {
+        html += renderizarResumoOrcamento(fatores);
       }
 
       resultadoDiv.innerHTML = html;
+    }
+
+    function renderizarResumoOrcamento(fatores) {
+      const codigos = Object.keys(orcamento);
+      if (!modoOrcamento) return "";
+      if (codigos.length === 0) {
+        return `<div class="orcamento-panel"><h3>Orçamento atual</h3><div class="preco-sec">Nenhum item incluído ainda. Marque "Incluir no orçamento" nos produtos desejados.</div></div>`;
+      }
+
+      let total = 0;
+      let linhas = "";
+
+      codigos.forEach(cod => {
+        const item = orcamento[cod];
+        const p = produtos.find(pp => pp.codigo === cod);
+        if (!p || p.preco_lista == null) return;
+        const valores = calcularValoresProduto(p, fatores);
+        const qtd = item.quantidade || 1;
+        const subtotal = valores.valorFinal * qtd;
+        total += subtotal;
+
+        const desc = p.chaves || "";
+        linhas += `<div class="orcamento-linha">
+          <span>${qtd}x ${cod} – ${desc}</span>
+          <span>R$ ${formatarPreco(valores.valorFinal)} / R$ ${formatarPreco(subtotal)}</span>
+        </div>`;
+      });
+
+      return `<div class="orcamento-panel">
+        <h3>Orçamento atual</h3>
+        ${linhas}
+        <div class="orcamento-total">Total do orçamento: R$ ${formatarPreco(total)}</div>
+      </div>`;
     }
 
     document.getElementById("btnBuscar").addEventListener("click", () => {
@@ -542,6 +682,7 @@
 
     descontoInput.addEventListener("change", () => {
       if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
+      else if (modoOrcamento) resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
     });
 
     btnToggleAdmin.addEventListener("click", () => {
@@ -564,7 +705,14 @@
       }
       if (campoBusca.value.trim()) {
         buscarProduto(campoBusca.value);
+      } else if (modoOrcamento) {
+        resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
       }
+    });
+
+    btnToggleOrcamento.addEventListener("click", () => {
+      modoOrcamento = !modoOrcamento;
+      aplicarModoOrcamentoUI();
     });
 
     btnSalvarConfig.addEventListener("click", () => {
@@ -584,6 +732,47 @@
       statusSpan.textContent = "Configurações de IPI, frete, markup e desconto máximo salvas.";
       if (campoBusca.value.trim()) {
         buscarProduto(campoBusca.value);
+      } else if (modoOrcamento) {
+        resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
+      }
+    });
+
+    // Delegação de eventos para os controles de orçamento dentro do resultado
+    resultadoDiv.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!modoOrcamento) return;
+
+      if (target.classList.contains("chk-orcamento")) {
+        const codigo = target.getAttribute("data-codigo");
+        if (target.checked) {
+          const qtdInput = resultadoDiv.querySelector(`.input-qtd-orcamento[data-codigo="${codigo}"]`);
+          let qtd = parseInt(qtdInput ? qtdInput.value : "1", 10);
+          if (isNaN(qtd) || qtd < 1) qtd = 1;
+          orcamento[codigo] = { quantidade: qtd };
+        } else {
+          delete orcamento[codigo];
+        }
+        if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
+        else resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
+      }
+
+      if (target.classList.contains("input-qtd-orcamento")) {
+        const codigo = target.getAttribute("data-codigo");
+        let qtd = parseInt(target.value, 10);
+        if (isNaN(qtd) || qtd < 1) {
+          qtd = 1;
+          target.value = "1";
+        }
+        if (orcamento[codigo]) {
+          orcamento[codigo].quantidade = qtd;
+        } else {
+          // se ainda não estava marcado mas usuário mexeu na quantidade, assumimos que quer incluir
+          orcamento[codigo] = { quantidade: qtd };
+          const chk = resultadoDiv.querySelector(`.chk-orcamento[data-codigo="${codigo}"]`);
+          if (chk) chk.checked = true;
+        }
+        if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
+        else resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
       }
     });
 
