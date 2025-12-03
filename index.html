@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Consulta de Preços - Starmobile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      background: #f5f5f5;
+    }
+    header {
+      padding: 12px 16px;
+      background: #111;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+    .tagline {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    main {
+      padding: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+      flex: 1;
+      box-sizing: border-box;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    label {
+      font-size: 12px;
+      color: #333;
+    }
+    input[type="text"],
+    input[type="number"] {
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      min-width: 120px;
+      box-sizing: border-box;
+    }
+    input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+    }
+    button {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #fff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+    }
+    button.primary {
+      background: #111;
+      color: #fff;
+      border-color: #111;
+    }
+    button:active {
+      transform: scale(0.97);
+    }
+    #status {
+      font-size: 12px;
+      color: #555;
+      margin-top: 6px;
+    }
+    #resultado {
+      font-size: 14px;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+    .item {
+      padding: 8px 0;
+      border-top: 1px solid #eee;
+    }
+    .item:first-child {
+      border-top: none;
+    }
+    .preco {
+      font-size: 13px;
+      font-weight: 500;
+      margin-top: 4px;
+      color: #555;
+    }
+    .preco-final {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    .preco-sec {
+      font-size: 11px;
+      color: #777;
+    }
+    .badge-admin {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #0b915e;
+      color: #fff;
+    }
+    #adminConfig {
+      border-radius: 8px;
+      padding: 8px;
+      background: #f0f4f0;
+      margin-bottom: 8px;
+      display: none;
+    }
+    footer {
+      font-size: 11px;
+      color: #777;
+      text-align: center;
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Consulta de Preços – Starmobile</h1>
+      <div class="tagline">
+        Uso interno: pesquisa por código, nome e palavras-chave, com cálculo automático de IPI, frete, markup e desconto autorizado.
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="adminBadge" class="badge-admin" style="display:none;">Modo gerente</span>
+      <button id="btnToggleAdmin">🔐 Modo gerente</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <div id="adminConfig">
+        <div class="controls-row">
+          <label for="ipiPercent">IPI (%):</label>
+          <input id="ipiPercent" type="number" step="0.01" placeholder="ex.: 5" />
+          <label for="fretePercent">Frete (%):</label>
+          <input id="fretePercent" type="number" step="0.01" placeholder="ex.: 5" />
+          <label for="markupPercent">Markup (%):</label>
+          <input id="markupPercent" type="number" step="0.01" placeholder="ex.: 10" />
+        </div>
+        <div class="controls-row">
+          <label for="maxDescontoPercent">Desconto máximo consultor (%):</label>
+          <input id="maxDescontoPercent" type="number" step="0.01" placeholder="ex.: 10" />
+          <button id="btnSalvarConfig">💾 Salvar</button>
+        </div>
+        <div class="preco-sec">
+          Estes percentuais serão aplicados a todas as consultas neste dispositivo/navegador. O desconto do consultor será limitado ao percentual máximo definido.
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <label for="descontoPercent">Desconto consultor (%):</label>
+        <input id="descontoPercent" type="number" step="0.01" placeholder="ex.: 5" />
+      </div>
+
+      <div class="controls">
+        <input id="campoBusca" type="text" placeholder="Ex.: 1467PM, CADEIRA ATENA COM DEBRUM FAIXA 2, zoe vidro 2,20..." />
+        <button id="btnFalar">🎤 <span>Falar</span></button>
+        <button id="btnBuscar" class="primary">🔎 <span>Buscar</span></button>
+      </div>
+      <div id="status"></div>
+      <div id="resultado"></div>
+    </div>
+  </main>
+
+  <footer>
+    Consulta interna de preços • Starmobile Design
+  </footer>
+
+  <script>
+    let produtos = [];
+    let frasesUnicas = [];
+    let isAdmin = false;
+
+    const campoBusca = document.getElementById("campoBusca");
+    const statusSpan = document.getElementById("status");
+    const resultadoDiv = document.getElementById("resultado");
+    const btnFalar = document.getElementById("btnFalar");
+
+    const ipiInput = document.getElementById("ipiPercent");
+    const freteInput = document.getElementById("fretePercent");
+    const markupInput = document.getElementById("markupPercent");
+    const maxDescInput = document.getElementById("maxDescontoPercent");
+    const descontoInput = document.getElementById("descontoPercent");
+
+    const adminConfigDiv = document.getElementById("adminConfig");
+    const btnToggleAdmin = document.getElementById("btnToggleAdmin");
+    const btnSalvarConfig = document.getElementById("btnSalvarConfig");
+    const adminBadge = document.getElementById("adminBadge");
+
+    const STORAGE_KEY_ADMIN = "starmobile_admin";
+    const STORAGE_KEY_IPI = "starmobile_ipi_percent";
+    const STORAGE_KEY_FRETE = "starmobile_frete_percent";
+    const STORAGE_KEY_MARKUP = "starmobile_markup_percent";
+    const STORAGE_KEY_MAX_DESC = "starmobile_max_desconto_percent";
+
+    const SENHA_GERENTE = "STAR2025";
+
+    function normalizar(str) {
+      return String(str || "")
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+    }
+
+    function formatarPreco(valor) {
+      return Number(valor).toFixed(2).replace(".", ",");
+    }
+
+    function numeroInteiroParaMetro(numStr) {
+      const n = parseInt(numStr, 10);
+      if (isNaN(n)) return null;
+      if (numStr.length === 4) {
+        return (n / 1000).toFixed(2);
+      } else if (numStr.length === 3) {
+        return (n / 100).toFixed(2);
+      }
+      return null;
+    }
+
+    function extrairNumeros(texto) {
+      if (!texto) return [];
+      let s = String(texto).toLowerCase().replace(/,/g, ".");
+      const nums = [];
+      const re = /\d+(?:\.\d+)?/g;
+      let m;
+      while ((m = re.exec(s)) !== null) {
+        const v = parseFloat(m[0]);
+        if (!isNaN(v)) nums.push(v);
+      }
+      return nums;
+    }
+
+    function normalizarDimensoes(texto) {
+      if (!texto) return "";
+      let t = String(texto);
+      let lower = t.toLowerCase();
+
+      lower = lower
+        .replace(/ponto/g, ".")
+        .replace(/vírgula/g, ".")
+        .replace(/virgula/g, ".");
+
+      lower = lower.replace(/\b(\d{3,4})\b/g, (m, a) => {
+        const conv = numeroInteiroParaMetro(a);
+        return conv !== null ? conv : m;
+      });
+
+      lower = lower.replace(/\b(\d+)[\.](\d{2})\b/g, (m, a, b) => {
+        const num = parseFloat(a + "." + b);
+        if (isNaN(num)) return m;
+        return num.toFixed(1);
+      });
+
+      return lower;
+    }
+
+    // <<< AQUI: carregar direto o número com ponto, sem trocar por vírgula >>>
+    function carregarConfigNosInputs() {
+      const ipi = parseFloat(localStorage.getItem(STORAGE_KEY_IPI));
+      const frete = parseFloat(localStorage.getItem(STORAGE_KEY_FRETE));
+      const markup = parseFloat(localStorage.getItem(STORAGE_KEY_MARKUP));
+      const maxDesc = parseFloat(localStorage.getItem(STORAGE_KEY_MAX_DESC));
+
+      if (!isNaN(ipi)) ipiInput.value = ipi.toString();
+      if (!isNaN(frete)) freteInput.value = frete.toString();
+      if (!isNaN(markup)) markupInput.value = markup.toString();
+      if (!isNaN(maxDesc)) maxDescInput.value = maxDesc.toString();
+    }
+
+    function obterPercentual(valorStr) {
+      const v = parseFloat(String(valorStr).replace(",", "."));
+      if (isNaN(v)) return 0;
+      return v;
+    }
+
+    function obterConfigAtual() {
+      const ipiStored = parseFloat(localStorage.getItem(STORAGE_KEY_IPI));
+      const freteStored = parseFloat(localStorage.getItem(STORAGE_KEY_FRETE));
+      const markupStored = parseFloat(localStorage.getItem(STORAGE_KEY_MARKUP));
+      const maxDescStored = parseFloat(localStorage.getItem(STORAGE_KEY_MAX_DESC));
+
+      const ipi = !isNaN(ipiStored) ? ipiStored : 0;
+      const frete = !isNaN(freteStored) ? freteStored : 0;
+      const markup = !isNaN(markupStored) ? markupStored : 0;
+      const maxDesc = !isNaN(maxDescStored) ? maxDescStored : 0;
+
+      return { ipi, frete, markup, maxDesc };
+    }
+
+    function aplicarModoAdminUI() {
+      if (isAdmin) {
+        adminConfigDiv.style.display = "block";
+        adminBadge.style.display = "inline-block";
+        btnToggleAdmin.textContent = "🚪 Sair do modo gerente";
+        carregarConfigNosInputs();
+      } else {
+        adminConfigDiv.style.display = "none";
+        adminBadge.style.display = "none";
+        btnToggleAdmin.textContent = "🔐 Modo gerente";
+      }
+    }
+
+    // Ao carregar a página, já puxa os valores do storage para os inputs (se existirem)
+    carregarConfigNosInputs();
+
+    fetch("produtos.json")
+      .then(res => {
+        if (!res.ok) throw new Error("Erro HTTP: " + res.status);
+        return res.json();
+      })
+      .then(data => {
+        const setFrases = new Set();
+        produtos = (data || []).map(p => {
+          const campos = Array.isArray(p.campos) ? p.campos : (p.chaves ? [p.chaves] : []);
+          const camposNorm = campos.map(normalizar).filter(Boolean);
+          const codigoNorm = normalizar(p.codigo);
+
+          let dimVals = [];
+          campos.forEach(c => {
+            dimVals = dimVals.concat(extrairNumeros(c));
+          });
+
+          camposNorm.forEach(f => setFrases.add(f));
+          return {
+            ...p,
+            _campos: campos,
+            _camposNorm: camposNorm,
+            _codigoNorm: codigoNorm,
+            _dimVals: dimVals
+          };
+        });
+        frasesUnicas = Array.from(setFrases);
+        statusSpan.textContent = "Produtos carregados: " + produtos.length;
+      })
+      .catch(err => {
+        console.error("Erro ao carregar produtos.json:", err);
+        statusSpan.textContent = "Erro ao carregar produtos.json";
+      });
+
+    if (localStorage.getItem(STORAGE_KEY_ADMIN) === "1") {
+      isAdmin = true;
+    }
+    aplicarModoAdminUI();
+
+    function buscarProduto(termoBruto) {
+      let termoOriginal = String(termoBruto || "").trim();
+      if (!termoOriginal) {
+        statusSpan.textContent = "Informe um código ou termo para busca.";
+        resultadoDiv.innerHTML = "";
+        return;
+      }
+
+      if (!produtos || !produtos.length) {
+        statusSpan.textContent = "Nenhum produto carregado (ver produtos.json).";
+        resultadoDiv.innerHTML = "";
+        return;
+      }
+
+      const termoComDim = normalizarDimensoes(termoOriginal);
+      const numerosBusca = extrairNumeros(termoComDim);
+
+      const termoNorm = normalizar(termoComDim);
+      const termoTokens = termoNorm.split(/\s+/).filter(Boolean);
+
+      let matches = [];
+
+      const exato = produtos.find(p => p._codigoNorm === termoNorm);
+      if (exato) {
+        matches = [exato];
+      } else {
+        const termoSemEspaco = termoNorm.replace(/\s+/g, "");
+        const codigoParcial = produtos.find(p =>
+          p._codigoNorm.replace(/\s+/g, "").includes(termoSemEspaco)
+        );
+        if (codigoParcial) {
+          matches = [codigoParcial];
+        } else {
+          const frasesBuscadas = frasesUnicas.filter(f => {
+            const fTokens = f.split(/\s+/).filter(Boolean);
+            if (fTokens.length === 0) return false;
+            if (fTokens.length === 1) {
+              return termoTokens.includes(fTokens[0]);
+            } else {
+              return termoNorm.includes(f);
+            }
+          });
+
+          if (frasesBuscadas.length > 0) {
+            matches = produtos.filter(p =>
+              frasesBuscadas.every(fr =>
+                p._camposNorm.some(cf => cf.includes(fr))
+              )
+            );
+          } else {
+            const tokens = termoTokens;
+            matches = produtos.filter(p => {
+              const texto = p._codigoNorm + " " + p._camposNorm.join(" ");
+              return tokens.every(t => texto.includes(t));
+            });
+          }
+        }
+      }
+
+      if (numerosBusca.length > 0) {
+        const tol = 0.01;
+        matches = matches.filter(p => {
+          if (!p._dimVals || p._dimVals.length === 0) return true;
+          return numerosBusca.every(nb =>
+            p._dimVals.some(dp => Math.abs(dp - nb) < tol)
+          );
+        });
+      }
+
+      if (!matches || matches.length === 0) {
+        statusSpan.textContent = "Produto não encontrado para: " + termoOriginal;
+        resultadoDiv.innerHTML = "";
+        return;
+      }
+
+      if (matches.length === 1) {
+        statusSpan.textContent = "1 produto encontrado";
+      } else {
+        statusSpan.textContent = matches.length + " produtos encontrados";
+      }
+
+      const { ipi, frete, markup, maxDesc } = obterConfigAtual();
+      const fatorIPI = 1 + (ipi / 100);
+      const fatorFrete = 1 + (frete / 100);
+      const fatorMarkup = 1 + (markup / 100);
+
+      let descontoDigitado = obterPercentual(descontoInput.value);
+      let descontoAplicado = descontoDigitado;
+
+      if (!isAdmin && descontoDigitado > maxDesc) {
+        descontoAplicado = maxDesc;
+      }
+
+      const fatorDesconto = 1 - (descontoAplicado / 100);
+
+      let avisoDesconto = "";
+      if (!isAdmin && descontoDigitado > maxDesc && maxDesc > 0) {
+        avisoDesconto = `Desconto limitado a ${maxDesc.toFixed(2)}% pela gerência.`;
+      } else if (!isAdmin && descontoDigitado > 0 && maxDesc === 0) {
+        avisoDesconto = `Nenhum desconto autorizado pela gerência.`;
+      }
+
+      let html = "";
+      if (matches.length > 1) {
+        html += `<div><strong>Foram encontradas ${matches.length} opções para a sua busca:</strong></div>`;
+      }
+
+      matches.forEach((p) => {
+        html += `<div class="item">`;
+        html += `<div><strong>Código:</strong> ${p.codigo}</div>`;
+        if (p.chaves) {
+          html += `<div><strong>Descrição:</strong> ${p.chaves}</div>`;
+        }
+
+        if (p.preco_lista != null) {
+          const base = Number(p.preco_lista);
+          const valorComAcrescimos = base * fatorIPI * fatorFrete * fatorMarkup;
+          const valorFinal = valorComAcrescimos * fatorDesconto;
+
+          if (isAdmin) {
+            html += `<div class="preco">Tabela: R$ ${formatarPreco(base)}</div>`;
+            html += `<div class="preco">Com IPI ${ipi.toFixed(2)}%, frete ${frete.toFixed(2)}% e markup ${markup.toFixed(2)}%: R$ ${formatarPreco(valorComAcrescimos)}</div>`;
+            if (descontoAplicado > 0) {
+              html += `<div class="preco-final">Com desconto ${descontoAplicado.toFixed(2)}%: R$ ${formatarPreco(valorFinal)}</div>`;
+            } else {
+              html += `<div class="preco-final">Valor final: R$ ${formatarPreco(valorComAcrescimos)}</div>`;
+            }
+          } else {
+            html += `<div class="preco-final">Valor: R$ ${formatarPreco(valorFinal)}</div>`;
+            html += `<div class="preco-sec">Valor calculado com IPI, frete, markup e desconto autorizado pela gerência.</div>`;
+          }
+        } else {
+          html += `<div class="preco-sec">Sem preço de tabela cadastrado.</div>`;
+        }
+
+        html += `</div>`;
+      });
+
+      if (avisoDesconto) {
+        html = `<div class="preco-sec">${avisoDesconto}</div>` + html;
+      }
+
+      resultadoDiv.innerHTML = html;
+    }
+
+    document.getElementById("btnBuscar").addEventListener("click", () => {
+      buscarProduto(campoBusca.value);
+    });
+
+    campoBusca.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        buscarProduto(campoBusca.value);
+      }
+    });
+
+    descontoInput.addEventListener("change", () => {
+      if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
+    });
+
+    btnToggleAdmin.addEventListener("click", () => {
+      if (!isAdmin) {
+        const senha = prompt("Digite a senha do gerente:");
+        if (senha === null) return;
+        if (senha === SENHA_GERENTE) {
+          isAdmin = true;
+          localStorage.setItem(STORAGE_KEY_ADMIN, "1");
+          aplicarModoAdminUI();
+          statusSpan.textContent = "Modo gerente ativado.";
+        } else {
+          alert("Senha incorreta.");
+        }
+      } else {
+        isAdmin = false;
+        localStorage.removeItem(STORAGE_KEY_ADMIN);
+        aplicarModoAdminUI();
+        statusSpan.textContent = "Modo gerente desativado.";
+      }
+      if (campoBusca.value.trim()) {
+        buscarProduto(campoBusca.value);
+      }
+    });
+
+    btnSalvarConfig.addEventListener("click", () => {
+      if (!isAdmin) return;
+      const ipiVal = obterPercentual(ipiInput.value);
+      const freteVal = obterPercentual(freteInput.value);
+      const markupVal = obterPercentual(markupInput.value);
+      const maxDescVal = obterPercentual(maxDescInput.value);
+
+      localStorage.setItem(STORAGE_KEY_IPI, String(ipiVal));
+      localStorage.setItem(STORAGE_KEY_FRETE, String(freteVal));
+      localStorage.setItem(STORAGE_KEY_MARKUP, String(markupVal));
+      localStorage.setItem(STORAGE_KEY_MAX_DESC, String(maxDescVal));
+
+      carregarConfigNosInputs();
+
+      statusSpan.textContent = "Configurações de IPI, frete, markup e desconto máximo salvas.";
+      if (campoBusca.value.trim()) {
+        buscarProduto(campoBusca.value);
+      }
+    });
+
+    let recognition = null;
+
+    if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = "pt-BR";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        statusSpan.textContent = "Ouvindo...";
+      };
+
+      recognition.onerror = (event) => {
+        statusSpan.textContent = "Erro de voz: " + event.error;
+      };
+
+      recognition.onresult = (event) => {
+        const texto = event.results[0][0].transcript;
+        campoBusca.value = texto;
+        statusSpan.textContent = "Você disse: \"" + texto + "\"";
+        buscarProduto(texto);
+      };
+
+      btnFalar.addEventListener("click", () => {
+        recognition.start();
+      });
+    } else {
+      statusSpan.textContent = "Reconhecimento de voz não suportado neste navegador.";
+      btnFalar.disabled = true;
+    }
+  </script>
+</body>
+</html>
