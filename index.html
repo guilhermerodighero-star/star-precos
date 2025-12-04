@@ -65,6 +65,9 @@
       align-items: center;
       margin-bottom: 6px;
     }
+    .controls-buttons {
+      justify-content: flex-start;
+    }
     label {
       font-size: 12px;
       color: #333;
@@ -215,13 +218,38 @@
       font-size: 13px;
       padding: 4px 0;
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       justify-content: space-between;
-      gap: 6px;
+      gap: 8px;
       border-top: 1px solid #f0f0f0;
+      align-items: center;
     }
     .orcamento-linha:first-child {
       border-top: none;
+    }
+    .orcamento-desc {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+    }
+    .orcamento-desc span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .orcamento-thumb {
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      border: 1px solid #eee;
+      object-fit: cover;
+      background: #fafafa;
+    }
+    .orcamento-valores {
+      white-space: nowrap;
+      font-weight: 500;
     }
     .orcamento-total {
       margin-top: 8px;
@@ -309,7 +337,12 @@
       #status,
       #btnFalar,
       #btnBuscar,
+      #btnLimparBusca,
       .category-filters {
+        display: none !important;
+      }
+      /* Esconde os cards de resultado da busca (parte em vermelho do print) */
+      #resultado .item {
         display: none !important;
       }
       body {
@@ -324,12 +357,6 @@
         margin-top: 0;
       }
       .orcamento-acoes {
-        display: none !important;
-      }
-      .item {
-        grid-template-columns: 1fr;
-      }
-      .produto-imagem-wrapper {
         display: none !important;
       }
       #imageModal {
@@ -390,10 +417,15 @@
         </div>
       </div>
 
+      <!-- Campo de busca em uma linha -->
       <div class="controls">
         <input id="campoBusca" type="text" placeholder="Ex.: 1467PM, CADEIRA ATENA COM DEBRUM FAIXA 2, ZOE VIDRO 2,20..." />
+      </div>
+      <!-- Botões em outra linha abaixo -->
+      <div class="controls controls-buttons">
         <button id="btnFalar">🎤 <span>Falar</span></button>
         <button id="btnBuscar" class="primary">🔎 <span>Buscar</span></button>
+        <button id="btnLimparBusca">🧹 <span>Limpar</span></button>
       </div>
 
       <!-- Cabeçalho comercial do orçamento -->
@@ -448,6 +480,8 @@
     const statusSpan = document.getElementById("status");
     const resultadoDiv = document.getElementById("resultado");
     const btnFalar = document.getElementById("btnFalar");
+    const btnBuscar = document.getElementById("btnBuscar");
+    const btnLimparBusca = document.getElementById("btnLimparBusca");
 
     const ipiInput = document.getElementById("ipiPercent");
     const freteInput = document.getElementById("fretePercent");
@@ -895,8 +929,13 @@
 
         const desc = p.chaves || "";
         linhas += `<div class="orcamento-linha">
-          <span>${qtd}x ${p.codigo} – ${desc}</span>
-          <span>R$ ${formatarPreco(valores.valorFinal)} / R$ ${formatarPreco(subtotal)}</span>
+          <div class="orcamento-desc">
+            <img class="orcamento-thumb" src="imagens/${p.codigo}.jpg" alt="${p.codigo}" onerror="this.style.display='none';" />
+            <span>${p.codigo} – ${desc}</span>
+          </div>
+          <div class="orcamento-valores">
+            R$ ${formatarPreco(valores.valorFinal)} x ${qtd} = R$ ${formatarPreco(subtotal)}
+          </div>
         </div>`;
       });
 
@@ -942,7 +981,7 @@
         const desc = p.chaves || "";
 
         linhas.push(
-          `${qtd}x ${p.codigo} – ${desc}\nValor unitário: R$ ${formatarPreco(valores.valorFinal)}\nSubtotal: R$ ${formatarPreco(subtotal)}`
+          `${p.codigo} – ${desc}\nValor: R$ ${formatarPreco(valores.valorFinal)} x ${qtd} = R$ ${formatarPreco(subtotal)}`
         );
       });
 
@@ -950,13 +989,24 @@
       return linhas.join("\n\n");
     }
 
-    document.getElementById("btnBuscar").addEventListener("click", () => {
+    btnBuscar.addEventListener("click", () => {
       buscarProduto(campoBusca.value);
     });
 
     campoBusca.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         buscarProduto(campoBusca.value);
+      }
+    });
+
+    // Botão LIMPAR busca
+    btnLimparBusca.addEventListener("click", () => {
+      campoBusca.value = "";
+      statusSpan.textContent = "";
+      if (modoOrcamento) {
+        resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
+      } else {
+        resultadoDiv.innerHTML = "";
       }
     });
 
