@@ -137,6 +137,7 @@
       max-height: 100%;
       object-fit: cover;
       display: block;
+      cursor: pointer;
     }
     .produto-info {
       display: flex;
@@ -235,6 +236,71 @@
       padding: 8px;
     }
 
+    /* Cabeçalho comercial do orçamento */
+    #orcamentoHeader {
+      margin-top: 10px;
+      margin-bottom: 4px;
+      padding: 8px;
+      border-radius: 8px;
+      background: #f7f7ff;
+      display: none;
+      font-size: 12px;
+    }
+    .orc-header-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .orc-header-row label {
+      display: flex;
+      flex-direction: column;
+      font-size: 11px;
+    }
+    .orc-header-row input {
+      font-size: 12px;
+      min-width: 160px;
+    }
+
+    /* Filtros de categoria */
+    .category-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      font-size: 12px;
+    }
+    .category-filters button {
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 999px;
+      border: 1px solid #bbb;
+      background: #fff;
+    }
+    .category-filters button.active {
+      background: #111;
+      color: #fff;
+      border-color: #111;
+    }
+
+    /* Modal de imagem ampliada */
+    #imageModal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    #imageModal img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+
     @media print {
       header,
       .controls,
@@ -242,7 +308,8 @@
       #adminConfig,
       #status,
       #btnFalar,
-      #btnBuscar {
+      #btnBuscar,
+      .category-filters {
         display: none !important;
       }
       body {
@@ -263,6 +330,9 @@
         grid-template-columns: 1fr;
       }
       .produto-imagem-wrapper {
+        display: none !important;
+      }
+      #imageModal {
         display: none !important;
       }
     }
@@ -310,11 +380,46 @@
         <input id="descontoPercent" type="number" step="0.01" placeholder="ex.: 5" />
       </div>
 
+      <div class="controls-row">
+        <div class="category-filters">
+          <span>Filtro rápido:</span>
+          <button type="button" id="btnCatTodos" class="active">Todos</button>
+          <button type="button" id="btnCatMesas">Mesas</button>
+          <button type="button" id="btnCatCadeiras">Cadeiras</button>
+          <button type="button" id="btnCatPoltronas">Poltronas</button>
+        </div>
+      </div>
+
       <div class="controls">
         <input id="campoBusca" type="text" placeholder="Ex.: 1467PM, CADEIRA ATENA COM DEBRUM FAIXA 2, ZOE VIDRO 2,20..." />
         <button id="btnFalar">🎤 <span>Falar</span></button>
         <button id="btnBuscar" class="primary">🔎 <span>Buscar</span></button>
       </div>
+
+      <!-- Cabeçalho comercial do orçamento -->
+      <div id="orcamentoHeader">
+        <div class="orc-header-row">
+          <label>
+            Cliente
+            <input type="text" id="orcCliente" placeholder="Nome do cliente" />
+          </label>
+          <label>
+            Telefone / WhatsApp
+            <input type="text" id="orcTelefone" placeholder="(00) 00000-0000" />
+          </label>
+        </div>
+        <div class="orc-header-row">
+          <label>
+            Vendedor
+            <input type="text" id="orcVendedor" placeholder="Nome do consultor" />
+          </label>
+          <label>
+            Validade do orçamento
+            <input type="text" id="orcValidade" value="7 dias" />
+          </label>
+        </div>
+      </div>
+
       <div id="status"></div>
       <div id="resultado"></div>
     </div>
@@ -324,6 +429,11 @@
     Consulta interna de preços • Starmobile Design
   </footer>
 
+  <!-- Modal de imagem ampliada -->
+  <div id="imageModal">
+    <img id="modalImage" src="" alt="Imagem ampliada" />
+  </div>
+
   <script>
     let produtos = [];
     let frasesUnicas = [];
@@ -331,6 +441,8 @@
     let modoOrcamento = false;
     // orcamento[id] = { quantidade: number }
     let orcamento = {};
+    // filtro de categoria: "", "MESA", "CADEIRA", "POLTRONA"
+    let categoriaFiltro = "";
 
     const campoBusca = document.getElementById("campoBusca");
     const statusSpan = document.getElementById("status");
@@ -350,6 +462,17 @@
 
     const btnToggleOrcamento = document.getElementById("btnToggleOrcamento");
     const orcamentoBadge = document.getElementById("orcamentoBadge");
+    const orcamentoHeaderDiv = document.getElementById("orcamentoHeader");
+
+    const btnCatTodos = document.getElementById("btnCatTodos");
+    const btnCatMesas = document.getElementById("btnCatMesas");
+    const btnCatCadeiras = document.getElementById("btnCatCadeiras");
+    const btnCatPoltronas = document.getElementById("btnCatPoltronas");
+
+    const orcClienteInput = document.getElementById("orcCliente");
+    const orcTelefoneInput = document.getElementById("orcTelefone");
+    const orcVendedorInput = document.getElementById("orcVendedor");
+    const orcValidadeInput = document.getElementById("orcValidade");
 
     const STORAGE_KEY_ADMIN = "starmobile_admin";
     const STORAGE_KEY_IPI = "starmobile_ipi_percent";
@@ -358,6 +481,21 @@
     const STORAGE_KEY_MAX_DESC = "starmobile_max_desconto_percent";
 
     const SENHA_GERENTE = "STAR2025";
+
+    // Modal imagem
+    const imageModal = document.getElementById("imageModal");
+    const modalImage = document.getElementById("modalImage");
+
+    function abrirImagemModal(src) {
+      modalImage.src = src;
+      imageModal.style.display = "flex";
+    }
+    imageModal.addEventListener("click", () => {
+      imageModal.style.display = "none";
+      modalImage.src = "";
+    });
+    // expor função para o onclick inline
+    window.abrirImagemModal = abrirImagemModal;
 
     function normalizar(str) {
       return String(str || "")
@@ -503,9 +641,11 @@
       if (modoOrcamento) {
         orcamentoBadge.style.display = "inline-block";
         btnToggleOrcamento.textContent = "🧾 Sair do modo orçamento";
+        orcamentoHeaderDiv.style.display = "block";
       } else {
         orcamentoBadge.style.display = "none";
         btnToggleOrcamento.textContent = "🧾 Modo orçamento";
+        orcamentoHeaderDiv.style.display = "none";
       }
       if (campoBusca.value.trim()) {
         buscarProduto(campoBusca.value);
@@ -514,6 +654,15 @@
       } else {
         resultadoDiv.innerHTML = "";
       }
+    }
+
+    function aplicarFiltroCategoriaUI() {
+      const buttons = [btnCatTodos, btnCatMesas, btnCatCadeiras, btnCatPoltronas];
+      buttons.forEach(b => b.classList.remove("active"));
+      if (!categoriaFiltro) btnCatTodos.classList.add("active");
+      else if (categoriaFiltro === "MESA") btnCatMesas.classList.add("active");
+      else if (categoriaFiltro === "CADEIRA") btnCatCadeiras.classList.add("active");
+      else if (categoriaFiltro === "POLTRONA") btnCatPoltronas.classList.add("active");
     }
 
     carregarConfigNosInputs();
@@ -557,6 +706,7 @@
       isAdmin = true;
     }
     aplicarModoAdminUI();
+    aplicarFiltroCategoriaUI();
 
     function buscarProduto(termoBruto) {
       let termoOriginal = String(termoBruto || "").trim();
@@ -632,6 +782,13 @@
         });
       }
 
+      // Filtrar por categoria (MESA, CADEIRA, POLTRONA)
+      if (categoriaFiltro) {
+        matches = matches.filter(p =>
+          p._camposNorm.some(cf => cf.split(/\s+/).includes(categoriaFiltro))
+        );
+      }
+
       if (!matches || matches.length === 0) {
         statusSpan.textContent = "Produto não encontrado para: " + termoOriginal;
         resultadoDiv.innerHTML = modoOrcamento ? renderizarResumoOrcamento(calcularFatoresEDesconto()) : "";
@@ -659,7 +816,9 @@
 
         // Coluna da imagem
         html += `<div class="produto-imagem-wrapper">
-          <img src="imagens/${p.codigo}.jpg" alt="Imagem ${p.codigo}" onerror="this.style.display='none';" />
+          <img src="imagens/${p.codigo}.jpg" alt="Imagem ${p.codigo}"
+               onclick="abrirImagemModal('imagens/${p.codigo}.jpg')"
+               onerror="this.style.display='none';" />
         </div>`;
 
         // Coluna de informações
@@ -761,6 +920,17 @@
       let linhas = [];
       let total = 0;
 
+      const cliente = orcClienteInput.value.trim();
+      const telefone = orcTelefoneInput.value.trim();
+      const vendedor = orcVendedorInput.value.trim();
+      const validade = orcValidadeInput.value.trim();
+
+      if (cliente || telefone || vendedor || validade) {
+        linhas.push(
+          `Cliente: ${cliente || "-"}\nTelefone: ${telefone || "-"}\nVendedor: ${vendedor || "-"}\nValidade: ${validade || "7 dias"}\n`
+        );
+      }
+
       ids.forEach(id => {
         const item = orcamento[id];
         const p = produtos.find(pp => String(pp._id) === String(id));
@@ -845,6 +1015,28 @@
       } else if (modoOrcamento) {
         resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
       }
+    });
+
+    // Filtros de categoria
+    btnCatTodos.addEventListener("click", () => {
+      categoriaFiltro = "";
+      aplicarFiltroCategoriaUI();
+      if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
+    });
+    btnCatMesas.addEventListener("click", () => {
+      categoriaFiltro = "MESA";
+      aplicarFiltroCategoriaUI();
+      if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
+    });
+    btnCatCadeiras.addEventListener("click", () => {
+      categoriaFiltro = "CADEIRA";
+      aplicarFiltroCategoriaUI();
+      if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
+    });
+    btnCatPoltronas.addEventListener("click", () => {
+      categoriaFiltro = "POLTRONA";
+      aplicarFiltroCategoriaUI();
+      if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
     });
 
     // Delegação de eventos para orçamento
