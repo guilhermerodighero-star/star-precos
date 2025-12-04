@@ -179,6 +179,12 @@
       margin: 0 0 8px 0;
       font-size: 15px;
     }
+    .orcamento-acoes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
     .orcamento-linha {
       font-size: 13px;
       padding: 4px 0;
@@ -202,6 +208,32 @@
       color: #777;
       text-align: center;
       padding: 8px;
+    }
+
+    @media print {
+      header,
+      .controls,
+      .controls-row,
+      #adminConfig,
+      #status,
+      #btnFalar,
+      #btnBuscar {
+        display: none !important;
+      }
+      body {
+        background: #fff;
+      }
+      .card {
+        box-shadow: none;
+        border-radius: 0;
+      }
+      .orcamento-panel {
+        border-top: none;
+        margin-top: 0;
+      }
+      .orcamento-acoes {
+        display: none !important;
+      }
     }
   </style>
 </head>
@@ -444,11 +476,9 @@
         orcamentoBadge.style.display = "none";
         btnToggleOrcamento.textContent = "🧾 Modo orçamento";
       }
-      // Re-render orçamentos com o modo atualizado
       if (campoBusca.value.trim()) {
         buscarProduto(campoBusca.value);
       } else if (modoOrcamento) {
-        // Se não tiver busca, pelo menos renderiza o painel de orçamento vazio
         resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
       } else {
         resultadoDiv.innerHTML = "";
@@ -665,9 +695,38 @@
 
       return `<div class="orcamento-panel">
         <h3>Orçamento atual</h3>
+        <div class="orcamento-acoes">
+          <button type="button" id="btnLimparOrcamento">🧹 Limpar orçamento</button>
+          <button type="button" id="btnCopiarOrcamento">📋 Copiar orçamento</button>
+          <button type="button" id="btnImprimirOrcamento">🖨️ Imprimir / PDF</button>
+        </div>
         ${linhas}
         <div class="orcamento-total">Total do orçamento: R$ ${formatarPreco(total)}</div>
       </div>`;
+    }
+
+    function gerarTextoOrcamento(fatores) {
+      const codigos = Object.keys(orcamento);
+      if (codigos.length === 0) {
+        return "Orçamento vazio.";
+      }
+      let linhas = [];
+      let total = 0;
+      codigos.forEach(cod => {
+        const item = orcamento[cod];
+        const p = produtos.find(pp => pp.codigo === cod);
+        if (!p || p.preco_lista == null) return;
+        const valores = calcularValoresProduto(p, fatores);
+        const qtd = item.quantidade || 1;
+        const subtotal = valores.valorFinal * qtd;
+        total += subtotal;
+        const desc = p.chaves || "";
+        linhas.push(
+          `${qtd}x ${cod} – ${desc}\nValor unitário: R$ ${formatarPreco(valores.valorFinal)}\nSubtotal: R$ ${formatarPreco(subtotal)}`
+        );
+      });
+      linhas.push(`\nTotal do orçamento: R$ ${formatarPreco(total)}`);
+      return linhas.join("\n\n");
     }
 
     document.getElementById("btnBuscar").addEventListener("click", () => {
@@ -737,7 +796,7 @@
       }
     });
 
-    // Delegação de eventos para os controles de orçamento dentro do resultado
+    // Delegação de eventos para orçamento: incluir/remover, qtd, limpar, copiar, imprimir
     resultadoDiv.addEventListener("change", (event) => {
       const target = event.target;
       if (!modoOrcamento) return;
@@ -766,13 +825,44 @@
         if (orcamento[codigo]) {
           orcamento[codigo].quantidade = qtd;
         } else {
-          // se ainda não estava marcado mas usuário mexeu na quantidade, assumimos que quer incluir
           orcamento[codigo] = { quantidade: qtd };
           const chk = resultadoDiv.querySelector(`.chk-orcamento[data-codigo="${codigo}"]`);
           if (chk) chk.checked = true;
         }
         if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
         else resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
+      }
+    });
+
+    resultadoDiv.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!modoOrcamento) return;
+
+      if (target.id === "btnLimparOrcamento") {
+        orcamento = {};
+        if (campoBusca.value.trim()) {
+          buscarProduto(campoBusca.value);
+        } else {
+          resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
+        }
+      }
+
+      if (target.id === "btnCopiarOrcamento") {
+        const fatores = calcularFatoresEDesconto();
+        const texto = gerarTextoOrcamento(fatores);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(texto).then(() => {
+            alert("Orçamento copiado para a área de transferência.");
+          }).catch(() => {
+            prompt("Não foi possível copiar automaticamente. Copie manualmente o texto abaixo:", texto);
+          });
+        } else {
+          prompt("Copie o orçamento:", texto);
+        }
+      }
+
+      if (target.id === "btnImprimirOrcamento") {
+        window.print();
       }
     });
 
