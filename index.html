@@ -121,9 +121,6 @@
     .item:first-child {
       border-top: none;
     }
-    .item-sem-imagem {
-      grid-template-columns: 1fr;
-    }
     .produto-imagem-wrapper {
       width: 120px;
       height: 120px;
@@ -332,7 +329,7 @@
     let frasesUnicas = [];
     let isAdmin = false;
     let modoOrcamento = false;
-    // orcamento[codigo] = { quantidade: number }
+    // orcamento[id] = { quantidade: number }
     let orcamento = {};
 
     const campoBusca = document.getElementById("campoBusca");
@@ -528,7 +525,7 @@
       })
       .then(data => {
         const setFrases = new Set();
-        produtos = (data || []).map(p => {
+        produtos = (data || []).map((p, idx) => {
           const campos = Array.isArray(p.campos) ? p.campos : (p.chaves ? [p.chaves] : []);
           const camposNorm = campos.map(normalizar).filter(Boolean);
           const codigoNorm = normalizar(p.codigo);
@@ -541,6 +538,7 @@
           camposNorm.forEach(f => setFrases.add(f));
           return {
             ...p,
+            _id: idx,
             _campos: campos,
             _camposNorm: camposNorm,
             _codigoNorm: codigoNorm,
@@ -582,10 +580,12 @@
 
       let matches = [];
 
+      // 1) Código exato
       const exato = produtos.find(p => p._codigoNorm === termoNorm);
       if (exato) {
         matches = [exato];
       } else {
+        // 2) Código parcial
         const termoSemEspaco = termoNorm.replace(/\s+/g, "");
         const codigoParcial = produtos.find(p =>
           p._codigoNorm.replace(/\s+/g, "").includes(termoSemEspaco)
@@ -593,6 +593,7 @@
         if (codigoParcial) {
           matches = [codigoParcial];
         } else {
+          // 3) Frases completas
           const frasesBuscadas = frasesUnicas.filter(f => {
             const fTokens = f.split(/\s+/).filter(Boolean);
             if (fTokens.length === 0) return false;
@@ -610,6 +611,7 @@
               )
             );
           } else {
+            // 4) Fallback por tokens
             const tokens = termoTokens;
             matches = produtos.filter(p => {
               const texto = p._codigoNorm + " " + p._camposNorm.join(" ");
@@ -619,6 +621,7 @@
         }
       }
 
+      // Filtrar por dimensões numéricas (quando houver)
       if (numerosBusca.length > 0) {
         const tol = 0.01;
         matches = matches.filter(p => {
@@ -650,13 +653,13 @@
 
       matches.forEach((p) => {
         const valores = calcularValoresProduto(p, fatores);
-        const temImagem = true; // tentaremos carregar, se não existir o onerror esconde
+        const id = p._id;
 
         html += `<div class="item">`;
 
         // Coluna da imagem
         html += `<div class="produto-imagem-wrapper">
-          <img src="imagens/${p.codigo}.jpg" alt="Imagem ${p.codigo}" onerror="this.style.display='none';this.parentElement.classList.add('sem-imagem');" />
+          <img src="imagens/${p.codigo}.jpg" alt="Imagem ${p.codigo}" onerror="this.style.display='none';" />
         </div>`;
 
         // Coluna de informações
@@ -681,24 +684,24 @@
           }
 
           if (modoOrcamento) {
-            const emOrc = orcamento[p.codigo];
+            const emOrc = orcamento[id];
             const qtd = emOrc ? emOrc.quantidade : 1;
             const subtotal = valores.valorFinal * qtd;
             const checkedAttr = emOrc ? "checked" : "";
             html += `<div class="orcamento-controls">
-              <label><input type="checkbox" class="chk-orcamento" data-codigo="${p.codigo}" ${checkedAttr}> Incluir no orçamento</label>
+              <label><input type="checkbox" class="chk-orcamento" data-id="${id}" ${checkedAttr}> Incluir no orçamento</label>
               <label>Qtd:
-                <input type="number" min="1" value="${qtd}" class="input-qtd-orcamento" data-codigo="${p.codigo}">
+                <input type="number" min="1" value="${qtd}" class="input-qtd-orcamento" data-id="${id}">
               </label>
-              <span class="orcamento-subtotal" data-codigo="${p.codigo}">Subtotal: R$ ${formatarPreco(subtotal)}</span>
+              <span class="orcamento-subtotal" data-id="${id}">Subtotal: R$ ${formatarPreco(subtotal)}</span>
             </div>`;
           }
         } else {
           html += `<div class="preco-sec">Sem preço de tabela cadastrado.</div>`;
         }
 
-        html += `</div>`; // fim produto-info
-        html += `</div>`; // fim item
+        html += `</div>`; // produto-info
+        html += `</div>`; // item
       });
 
       if (fatores.avisoDesconto) {
@@ -713,18 +716,18 @@
     }
 
     function renderizarResumoOrcamento(fatores) {
-      const codigos = Object.keys(orcamento);
+      const ids = Object.keys(orcamento);
       if (!modoOrcamento) return "";
-      if (codigos.length === 0) {
+      if (ids.length === 0) {
         return `<div class="orcamento-panel"><h3>Orçamento atual</h3><div class="preco-sec">Nenhum item incluído ainda. Marque "Incluir no orçamento" nos produtos desejados.</div></div>`;
       }
 
       let total = 0;
       let linhas = "";
 
-      codigos.forEach(cod => {
-        const item = orcamento[cod];
-        const p = produtos.find(pp => pp.codigo === cod);
+      ids.forEach(id => {
+        const item = orcamento[id];
+        const p = produtos.find(pp => String(pp._id) === String(id));
         if (!p || p.preco_lista == null) return;
         const valores = calcularValoresProduto(p, fatores);
         const qtd = item.quantidade || 1;
@@ -733,7 +736,7 @@
 
         const desc = p.chaves || "";
         linhas += `<div class="orcamento-linha">
-          <span>${qtd}x ${cod} – ${desc}</span>
+          <span>${qtd}x ${p.codigo} – ${desc}</span>
           <span>R$ ${formatarPreco(valores.valorFinal)} / R$ ${formatarPreco(subtotal)}</span>
         </div>`;
       });
@@ -751,25 +754,28 @@
     }
 
     function gerarTextoOrcamento(fatores) {
-      const codigos = Object.keys(orcamento);
-      if (codigos.length === 0) {
+      const ids = Object.keys(orcamento);
+      if (ids.length === 0) {
         return "Orçamento vazio.";
       }
       let linhas = [];
       let total = 0;
-      codigos.forEach(cod => {
-        const item = orcamento[cod];
-        const p = produtos.find(pp => pp.codigo === cod);
+
+      ids.forEach(id => {
+        const item = orcamento[id];
+        const p = produtos.find(pp => String(pp._id) === String(id));
         if (!p || p.preco_lista == null) return;
         const valores = calcularValoresProduto(p, fatores);
         const qtd = item.quantidade || 1;
         const subtotal = valores.valorFinal * qtd;
         total += subtotal;
         const desc = p.chaves || "";
+
         linhas.push(
-          `${qtd}x ${cod} – ${desc}\nValor unitário: R$ ${formatarPreco(valores.valorFinal)}\nSubtotal: R$ ${formatarPreco(subtotal)}`
+          `${qtd}x ${p.codigo} – ${desc}\nValor unitário: R$ ${formatarPreco(valores.valorFinal)}\nSubtotal: R$ ${formatarPreco(subtotal)}`
         );
       });
+
       linhas.push(`\nTotal do orçamento: R$ ${formatarPreco(total)}`);
       return linhas.join("\n\n");
     }
@@ -841,39 +847,46 @@
       }
     });
 
-    // Delegação de eventos para orçamento: incluir/remover, qtd, limpar, copiar, imprimir
+    // Delegação de eventos para orçamento
     resultadoDiv.addEventListener("change", (event) => {
       const target = event.target;
       if (!modoOrcamento) return;
 
+      // Checkbox incluir no orçamento
       if (target.classList.contains("chk-orcamento")) {
-        const codigo = target.getAttribute("data-codigo");
+        const id = target.getAttribute("data-id");
+        const p = produtos.find(pp => String(pp._id) === String(id));
+
         if (target.checked) {
-          const qtdInput = resultadoDiv.querySelector(`.input-qtd-orcamento[data-codigo="${codigo}"]`);
+          const qtdInput = resultadoDiv.querySelector(`.input-qtd-orcamento[data-id="${id}"]`);
           let qtd = parseInt(qtdInput ? qtdInput.value : "1", 10);
           if (isNaN(qtd) || qtd < 1) qtd = 1;
-          orcamento[codigo] = { quantidade: qtd };
+          orcamento[id] = { quantidade: qtd };
         } else {
-          delete orcamento[codigo];
+          delete orcamento[id];
         }
+
         if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
         else resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
       }
 
+      // Quantidade
       if (target.classList.contains("input-qtd-orcamento")) {
-        const codigo = target.getAttribute("data-codigo");
+        const id = target.getAttribute("data-id");
         let qtd = parseInt(target.value, 10);
         if (isNaN(qtd) || qtd < 1) {
           qtd = 1;
           target.value = "1";
         }
-        if (orcamento[codigo]) {
-          orcamento[codigo].quantidade = qtd;
+
+        if (orcamento[id]) {
+          orcamento[id].quantidade = qtd;
         } else {
-          orcamento[codigo] = { quantidade: qtd };
-          const chk = resultadoDiv.querySelector(`.chk-orcamento[data-codigo="${codigo}"]`);
+          orcamento[id] = { quantidade: qtd };
+          const chk = resultadoDiv.querySelector(`.chk-orcamento[data-id="${id}"]`);
           if (chk) chk.checked = true;
         }
+
         if (campoBusca.value.trim()) buscarProduto(campoBusca.value);
         else resultadoDiv.innerHTML = renderizarResumoOrcamento(calcularFatoresEDesconto());
       }
@@ -911,6 +924,7 @@
       }
     });
 
+    // Voz
     let recognition = null;
 
     if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
